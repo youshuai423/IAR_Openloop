@@ -6,6 +6,7 @@
 #define digit 100000
 #define period 4625  // 半周期时钟数
 #define M 0.98  // 调制度
+#define fre 40
 
 int period_count = 0;  // 载波周期数
 int Tinv[3] = {0, 0, 0};  // 三相对应比较值
@@ -44,7 +45,7 @@ void PWMA_RELOAD0_IRQHandler(void)
     double theta = 0;
     int sector = 0;
     
-    Angle = fmod((10 * pi * (period_count / 1000.0)), (2 * pi));
+    Angle = fmod((2 * pi * fre * (period_count / 1000.0)), (2 * pi));
     theta = fmod(Angle,1/3.0 * pi);
     sector = floor( Angle / (1/3.0 * pi)) + 1;
     Dm = M * sin(1/3.0 * pi - theta) / 2.0;
