@@ -45,8 +45,8 @@
 
 /* motor 1 PWM modulo
    M1_PWM_MODULO = f_FastPerClk / f_PWM = 74MHz / 10kHz = 7400 */
-//#define M1_PWM_MODULO           (7400) 
-#define M1_PWM_MODULO           (9250) 
+#define M1_PWM_MODULO           (7400) 
+//#define M1_PWM_MODULO           (9250) 
  
 /* assignment of PWM channels to motor phases 
    0 - PWM channels 0&1

@@ -194,7 +194,7 @@ void Init_PIT()
   SIM_WR_SCGC6_PIT(SIM, TRUE);
   PIT_WR_MCR_MDIS(PIT, 0);
   PIT_WR_MCR_FRZ(PIT, 1);
-  PIT_WR_LDVAL(PIT, 0, 24700);
+  PIT_WR_LDVAL(PIT, 0, 2470000);  // 100ms??
   PIT_WR_TCTRL_TIE(PIT, 0, 1);
   PIT_WR_TCTRL_TEN(PIT, 0, 1);
   /* enable & setup interrupts */

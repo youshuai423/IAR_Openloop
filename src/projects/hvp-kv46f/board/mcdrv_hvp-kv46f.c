@@ -319,7 +319,7 @@ void InitPWMA(void)
     PWM_WR_OUTEN_PWMA_EN(PWMA, 0x7);
     PWM_WR_OUTEN_PWMB_EN(PWMA, 0x7);
     
-    PWM_WR_CTRL_PRSC(PWMA, 0, 3);
+    PWM_WR_CTRL_PRSC(PWMA, 0, 0);
     //PWM_WR_CTRL_PRSC(PWMA, 1, 3);
     //PWM_WR_CTRL_PRSC(PWMA, 2, 3);
        
