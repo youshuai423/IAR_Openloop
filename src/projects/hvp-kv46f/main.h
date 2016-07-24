@@ -33,9 +33,9 @@
 #define M 0.95 // 调制度
 #define VFramp 0.86
 #define Freramp 1
-#define fre_req 45
-#define Ud 60
-#define Frelimit_H 45
+#define fre_req 15
+#define Ud 40
+#define Frelimit_H 15
 #define Frelimit_L 0
 #define Voltlimit_H 40
 #define Voltlimit_L 5
@@ -53,7 +53,7 @@
 /******************************************************************************
 | local functions prototypes
 |----------------------------------------------------------------------------*/
-double RAMP(double ramp, double paramin, double Hlimit, double Llimit);
+double RAMP(double ramp, double initial, double increment, double Hlimit, double Llimit);
 double roundn(double);  // 截断小数点后位数
 void Init_FTM1(void);
 double PImodule(double Kp, double Ki, double inputk, double err, double *lasterr, double Uplim, double Downlim);

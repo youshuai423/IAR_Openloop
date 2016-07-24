@@ -48,9 +48,8 @@ void main(void)
 
 void PWMA_RELOAD0_IRQHandler(void)
 {    
-    volt_cmd = RAMP(VFramp, fre_cmd, Voltlimit_H, Voltlimit_L);
-    
-    //Angle = fmod((2 * pi * fre_cmd * (period_count / 10000.0)), (2 * pi));
+    volt_cmd = RAMP(VFramp, 0, fre_cmd, Voltlimit_H, Voltlimit_L);
+   
     Angle += 2 * pi * fre_cmd * 0.0001;
     if (Angle > 2 * pi)
       Angle -= 2*pi;
@@ -145,7 +144,7 @@ void PIT0_IRQHandler(void)
   if (fre_cmd < fre_req)
   {
     PIT_count ++;
-    fre_cmd = RAMP(Freramp, PIT_count * 0.1, Frelimit_H, Frelimit_L);
+    fre_cmd = RAMP(Freramp, fre_cmd, 0.1, Frelimit_H, Frelimit_L);
   }
 }
 
@@ -197,9 +196,9 @@ void Init_FTM1(void)
   PORT_WR_PCR_MUX(PORTA, 13, 7);  
 }
 
-double RAMP(double ramp, double paramin, double Hlimit, double Llimit)
+double RAMP(double ramp, double initial, double increment, double Hlimit, double Llimit)
 {
-  double temp = ramp * paramin;
+  double temp = ramp * increment + initial;
   if (temp > Hlimit)
     return Hlimit;
   else if (temp < Llimit)
