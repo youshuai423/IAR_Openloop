@@ -7,10 +7,6 @@ double fre_cmd = 0;
 double speed = 0;
 double FTM1cnt = 0;
 
-double spdcmd = 300;
-//double fre_req = 0;
-double spdlasterr = 0;
-
 int period_count = 0;  // 载波周期数
 int PIT_count = 0;
 int fre_count = 0;
@@ -21,6 +17,16 @@ double Dm = 0, Dn = 0, D0 = 0;  // 占空比
 int sector = 0;
 double Angle = 0;
 double theta = 0;
+
+uint16_t IU = 0;
+uint16_t IW = 0;
+uint16_t maxIU = 0;
+uint16_t minIU = 0;
+uint16_t maxIW = 0;
+uint16_t minIW = 0;
+uint16_t minIUarray[100];
+uint16_t minIWarray[100];
+int kmin = 0;
 
 void main(void)
 {
@@ -34,9 +40,14 @@ void main(void)
 
     /* initialize peripheral motor control driver for motor M1 */
     MCDRV_Init_M1();      
-    //Init_FTM1();
+    Init_FTM1();
     Init_PIT();
-
+    Init_ADC();
+    
+    int i = 0;
+    for(i = 0; i < 1000; i++){};  // 等待ADC模块稳定
+    ADC_WR_CTRL1_START0(ADC, 1); 
+    
     /* enable interrupts  */
     __enable_irq();
 
@@ -47,7 +58,19 @@ void main(void)
 }
 
 void PWMA_RELOAD0_IRQHandler(void)
-{    
+{   
+  IU = ADC_RD_RSLT_RSLT(ADC, 1);
+  IW = ADC_RD_RSLT_RSLT(ADC, 2);
+  
+  if (IU > maxIU)
+    maxIU = IU;
+  else if (IU < minIU)
+    minIU = IU;        
+  if (IW > maxIW)
+    maxIW = IW;
+  else if (IW < minIW)
+    minIU = IW;
+  
     volt_cmd = RAMP(VFramp, 0, fre_cmd, Voltlimit_H, Voltlimit_L);
    
     Angle += 2 * pi * fre_cmd * 0.0001;
@@ -105,9 +128,14 @@ void PWMA_RELOAD0_IRQHandler(void)
     PWM_WR_VAL3(PWMA, 2, Tinv[2]);
     
     period_count++;
-    if (period_count > 10000) 
+    if (period_count > 60000) 
     {
       period_count = 0;
+      minIUarray[kmin] = minIU;
+      minIWarray[kmin] = minIW;
+      minIU = IU;
+      minIW = IW;
+      kmin++;
     }
 
     last[0] = Tinv[0];
@@ -146,6 +174,54 @@ void PIT0_IRQHandler(void)
     PIT_count ++;
     fre_cmd = RAMP(Freramp, fre_cmd, 0.1, Frelimit_H, Frelimit_L);
   }
+}
+
+void Init_ADC(void)
+{
+  /* enable clock for ADC modules */
+  SIM_WR_SCGC5_ADC(SIM, 1);
+  
+  /* loop parallel mode */
+  ADC_WR_CTRL1_SMODE(ADC, 0x3);
+  
+  /* enable end-of-scan interrupt */
+  //ADC_WR_CTRL1_EOSIE0(ADC, 1);
+  
+  /* enable hwardware triggering */
+  //ADC_WR_CTRL1_SYNC0(ADC, 1);
+                      
+  /* start ADCA */
+  ADC_WR_CTRL1_STOP0(ADC, 0);
+  ADC_WR_CTRL2_STOP1(ADC, 1);
+    
+  /* input clock is 24.66MHz (148MHz fast peripheral clock divided by 6), 
+     single ended */
+  ADC_WR_CTRL2_DIV0(ADC, 0x005);
+  
+  /* parallel scans done independently */
+  ADC_WR_CTRL2_SIMULT(ADC, 0);
+  
+  ADC_WR_CLIST1_SAMPLE0(ADC, 0);
+  ADC_WR_CLIST1_SAMPLE1(ADC, 6);
+  ADC_WR_CLIST1_SAMPLE2(ADC, 7);
+
+  /* enable samples first two samples on both ADCA and ADCB */
+  //ADC_WR_SDIS(ADC, 0xFCFC);
+  ADC_WR_SDIS(ADC, 0xFFF8);
+        
+  /* power-up ADCA and ADCB */
+  ADC_WR_PWR_PD0(ADC, 0);
+  //ADC_WR_PWR_PD1(ADC, 0);
+ 
+  //ADC_WR_GC1_GAIN0(ADC, 2);
+  //ADC_WR_GC1_GAIN1(ADC, 2);
+  //ADC_WR_GC1_GAIN2(ADC, 2);
+  
+  ADC_WR_PWR2_SPEEDA(ADC, 3);
+  
+  /* enable & setup interrupt from ADC */
+  // NVIC_EnableIRQ(ADCA_IRQn);                                                  /* enable Interrupt */
+  // NVIC_SetPriority(ADCA_IRQn, 4);                                             /* set priority to interrupt */
 }
 
 void Init_FTM1(void)

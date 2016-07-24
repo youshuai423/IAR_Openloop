@@ -56,6 +56,7 @@
 double RAMP(double ramp, double initial, double increment, double Hlimit, double Llimit);
 double roundn(double);  // 截断小数点后位数
 void Init_FTM1(void);
+void Init_ADC();
 double PImodule(double Kp, double Ki, double inputk, double err, double *lasterr, double Uplim, double Downlim);
 
 /******************************************************************************
