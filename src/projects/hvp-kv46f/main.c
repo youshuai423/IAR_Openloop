@@ -4,7 +4,7 @@
 
 double volt_cmd = 0;
 double fre_cmd = 0;
-double speed = 0;
+int16_t speed = 0;
 double FTM1cnt = 0;
 
 int period_count = 0;  // 载波周期数
@@ -77,7 +77,7 @@ void PWMA_RELOAD0_IRQHandler(void)
     if (Angle > 2 * pi)
       Angle -= 2*pi;
     theta = fmod(Angle,1/3.0 * pi);
-    sector = floor( Angle / (1/3.0 * pi)) + 1;
+    sector = (int)floor( Angle / (1/3.0 * pi)) + 1;
     Dm = volt_cmd / Ud * sin(1/3.0 * pi - theta);
     Dn = volt_cmd / Ud * sin(theta);
     D0 = (1 - Dm - Dn) / 2.0;
@@ -158,17 +158,17 @@ void PIT0_IRQHandler(void)
   GPIO_WR_PTOR(PTD, 1<<0);
   GPIO_WR_PTOR(PTB, 1<<22);
   
- /* if (FTM_RD_SC_TOF(FTM1) == 0)
+  if (FTM_RD_SC_TOF(FTM1) == 0)
   {
-    speed = (FTM_RD_CNT(FTM1) - FTM1cnt) * 2.34375;
+    speed = (int)((FTM_RD_CNT(FTM1) - FTM1cnt) * 2.34375);
   }
   else
   {
-    speed = (FTM_RD_CNT(FTM1) + FTM1_MODULO - FTM1cnt) * 2.34375;
+    speed = (int)((FTM_RD_CNT(FTM1) + FTM1_MODULO - FTM1cnt) * 2.34375);
     FTM_WR_SC_TOF(FTM1, 0);
   }
   FTM1cnt = FTM_RD_CNT(FTM1);
-  */
+  
   if (fre_cmd < fre_req)
   {
     PIT_count ++;
