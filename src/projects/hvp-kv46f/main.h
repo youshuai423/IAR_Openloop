@@ -33,9 +33,9 @@
 #define M 0.95 // µ÷ÖÆ¶È
 #define VFramp 0.86
 #define Freramp 1
-#define fre_req 10
-#define Ud 40
-#define Frelimit_H 10
+#define fre_req 45
+#define Ud 60
+#define Frelimit_H 45
 #define Frelimit_L 0
 #define Voltlimit_H 40
 #define Voltlimit_L 5

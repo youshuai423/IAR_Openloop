@@ -274,14 +274,14 @@ void InitPWMA(void)
 
     /* recomended value of deadtime for FNB41560 on HVP-MC3PH is 1.5us
        DTCNT0,1 = T_dead * f_fpc = 1.5us * 74MHz = 111 */
-    PWM_WR_DTCNT0(PWMA, 0, 370);
-    PWM_WR_DTCNT0(PWMA, 1, 370);
-    PWM_WR_DTCNT0(PWMA, 2, 370);
-    PWM_WR_DTCNT0(PWMA, 3, 370);
-    PWM_WR_DTCNT1(PWMA, 0, 370);
-    PWM_WR_DTCNT1(PWMA, 1, 370);
-    PWM_WR_DTCNT1(PWMA, 2, 370);
-    PWM_WR_DTCNT1(PWMA, 3, 370);
+    PWM_WR_DTCNT0(PWMA, 0, 111);
+    PWM_WR_DTCNT0(PWMA, 1, 111);
+    PWM_WR_DTCNT0(PWMA, 2, 111);
+    PWM_WR_DTCNT0(PWMA, 3, 111);
+    PWM_WR_DTCNT1(PWMA, 0, 111);
+    PWM_WR_DTCNT1(PWMA, 1, 111);
+    PWM_WR_DTCNT1(PWMA, 2, 111);
+    PWM_WR_DTCNT1(PWMA, 3, 111);
       
     /* channels A and B disabled when fault 0 occurs */
     PWM_WR_DISMAP_DIS0A(PWMA, 0, 0, 0x0);

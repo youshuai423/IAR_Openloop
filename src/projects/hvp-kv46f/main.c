@@ -18,6 +18,10 @@ int Tinv[3] = {0, 0, 0};  // 三相对应比较值
 int last[3];  // 上周期Tinv值(for test)
 double Dm = 0, Dn = 0, D0 = 0;  // 占空比
 
+int sector = 0;
+double Angle = 0;
+double theta = 0;
+
 void main(void)
 {
     /* disable all interrupts before peripherals are initialized */
@@ -30,7 +34,7 @@ void main(void)
 
     /* initialize peripheral motor control driver for motor M1 */
     MCDRV_Init_M1();      
-    Init_FTM1();
+    //Init_FTM1();
     Init_PIT();
 
     /* enable interrupts  */
@@ -43,20 +47,13 @@ void main(void)
 }
 
 void PWMA_RELOAD0_IRQHandler(void)
-{
-    double Angle = 0;
-    double theta = 0;
-    int sector = 0;
-    
-   // fre_req = PImodule(frereqKp, frereqKi, fre_req, spdcmd - speed, &sqdlasterr , frereqUplim, frereqDownlim);
-   // if (fre_cmd < fre_req)
-   // {
-   //   fre_count++;
-   //   fre_cmd = RAMP(Freramp, fre_count * 0.0001, Frelimit_H, Frelimit_L);
-   // }
+{    
     volt_cmd = RAMP(VFramp, fre_cmd, Voltlimit_H, Voltlimit_L);
     
-    Angle = fmod((2 * pi * fre_cmd * (period_count / 10000.0)), (2 * pi));
+    //Angle = fmod((2 * pi * fre_cmd * (period_count / 10000.0)), (2 * pi));
+    Angle += 2 * pi * fre_cmd * 0.0001;
+    if (Angle > 2 * pi)
+      Angle -= 2*pi;
     theta = fmod(Angle,1/3.0 * pi);
     sector = floor( Angle / (1/3.0 * pi)) + 1;
     Dm = volt_cmd / Ud * sin(1/3.0 * pi - theta);
@@ -70,34 +67,34 @@ void PWMA_RELOAD0_IRQHandler(void)
     switch (sector)
     {
     case 1:
-      Tinv[0] = period - floor(period * (D0));
-      Tinv[1] = period - floor(period * (D0 + Dm));
-      Tinv[2] = period - floor(period * (D0 + Dm + Dn));
+      Tinv[0] = (int)(period * (Dm + Dn + D0));
+      Tinv[1] = (int)(period * (D0 + Dn));
+      Tinv[2] = (int)(period * (D0));
       break;
     case 2:
-      Tinv[0] = period - floor(period * (D0 + Dn));
-      Tinv[1] = period - floor(period * (D0));
-      Tinv[2] = period - floor(period * (D0 + Dm + Dn));
+      Tinv[0] = (int)(period * (Dm + D0));
+      Tinv[1] = (int)(period * (Dm + Dn + D0));
+      Tinv[2] = (int)(period * (D0));
       break;
     case 3:
-      Tinv[0] = period - floor(period * (D0 + Dm + Dn));
-      Tinv[1] = period - floor(period * (D0));
-      Tinv[2] = period - floor(period * (D0 + Dm));
+      Tinv[0] = (int)(period * (D0));
+      Tinv[1] = (int)(period * (Dm + Dn + D0));
+      Tinv[2] = (int)(period * (Dn + D0));
       break;
     case 4:
-      Tinv[0] = period - floor(period * (D0 + Dm + Dn));
-      Tinv[1] = period - floor(period * (D0 + Dn));
-      Tinv[2] = period - floor(period * (D0));
+      Tinv[0] = (int)(period * (D0));
+      Tinv[1] = (int)(period * (Dm + D0));
+      Tinv[2] = (int)(period * (Dm + Dn + D0));
       break;
     case 5:
-      Tinv[0] = period - floor(period * (D0 + Dm));
-      Tinv[1] = period - floor(period * (D0 + Dm + Dn));
-      Tinv[2] = period - floor(period * (D0));
+      Tinv[0] = (int)(period * (Dn + D0));
+      Tinv[1] = (int)(period * (D0));
+      Tinv[2] = (int)(period * (Dm + Dn + D0));
       break;
     case 6:
-      Tinv[0] = period - floor(period * (D0));
-      Tinv[1] = period - floor(period * (D0 + Dm + Dn));
-      Tinv[2] = period - floor(period * (D0 + Dn));
+      Tinv[0] = (int)(period * (Dm + Dn + D0));
+      Tinv[1] = (int)(period * (D0));
+      Tinv[2] = (int)(period * (Dm + D0));
     }
     
     PWM_WR_VAL2(PWMA, 0, -Tinv[0]);
@@ -134,7 +131,7 @@ void PIT0_IRQHandler(void)
   GPIO_WR_PTOR(PTD, 1<<0);
   GPIO_WR_PTOR(PTB, 1<<22);
   
-  if (FTM_RD_SC_TOF(FTM1) == 0)
+ /* if (FTM_RD_SC_TOF(FTM1) == 0)
   {
     speed = (FTM_RD_CNT(FTM1) - FTM1cnt) * 2.34375;
   }
@@ -144,7 +141,7 @@ void PIT0_IRQHandler(void)
     FTM_WR_SC_TOF(FTM1, 0);
   }
   FTM1cnt = FTM_RD_CNT(FTM1);
-  
+  */
   if (fre_cmd < fre_req)
   {
     PIT_count ++;
