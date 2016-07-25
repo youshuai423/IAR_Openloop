@@ -1,17 +1,19 @@
+/******************************************************************************
+| includes
+|----------------------------------------------------------------------------*/
 #include "main.h"
-#include "app_init.h"
 #include "math.h"
 
+/******************************************************************************
+| local variables
+|----------------------------------------------------------------------------*/
 double volt_cmd = 0;
 double fre_cmd = 0;
 int16_t speed = 0;
-double FTM1cnt = 0;
+int16_t FTM1cnt = 0;
 
 int period_count = 0;  // 载波周期数
-int PIT_count = 0;
-int fre_count = 0;
 int Tinv[3] = {0, 0, 0};  // 三相对应比较值
-int last[3];  // 上周期Tinv值(for test)
 double Dm = 0, Dn = 0, D0 = 0;  // 占空比
 
 int sector = 0;
@@ -28,6 +30,13 @@ uint16_t minIUarray[100];
 uint16_t minIWarray[100];
 int kmin = 0;
 
+/******************************************************************************
+@brief   Main
+
+@param   N/A
+
+@return  N/A
+******************************************************************************/
 void main(void)
 {
     /* disable all interrupts before peripherals are initialized */
@@ -39,7 +48,7 @@ void main(void)
     GPIO_SET_PDDR(PTB, 1<<22);
 
     /* initialize peripheral motor control driver for motor M1 */
-    MCDRV_Init_M1();      
+    Init_PWMA();      
     Init_FTM1();
     Init_PIT();
     Init_ADC();
@@ -57,27 +66,38 @@ void main(void)
     }
 }
 
+/******************************************************************************
+@brief   PWMA 中断 -- 电流采样及开环SVM
+
+@param   N/A
+
+@return  N/A
+******************************************************************************/
 void PWMA_RELOAD0_IRQHandler(void)
 {   
-  IU = ADC_RD_RSLT_RSLT(ADC, 1);
-  IW = ADC_RD_RSLT_RSLT(ADC, 2);
+    /* 读取电流采样 */
+    IU = ADC_RD_RSLT_RSLT(ADC, 1);
+    IW = ADC_RD_RSLT_RSLT(ADC, 2);
+      // 存储最值
+    if (IU > maxIU)
+      maxIU = IU;
+    else if (IU < minIU)
+      minIU = IU;
+    if (IW > maxIW)
+      maxIW = IW;
+    else if (IW < minIW)
+      minIU = IW;
   
-  if (IU > maxIU)
-    maxIU = IU;
-  else if (IU < minIU)
-    minIU = IU;        
-  if (IW > maxIW)
-    maxIW = IW;
-  else if (IW < minIW)
-    minIU = IW;
-  
+    /* V/f曲线计算电压给定值 */
     volt_cmd = RAMP(VFramp, 0, fre_cmd, Voltlimit_H, Voltlimit_L);
    
+    /* SVM */
+      // 扇区及夹角计算
     Angle += 2 * pi * fre_cmd * 0.0001;
-    if (Angle > 2 * pi)
-      Angle -= 2*pi;
+    if (Angle > 2 * pi)      Angle -= 2*pi;    
     theta = fmod(Angle,1/3.0 * pi);
     sector = (int)floor( Angle / (1/3.0 * pi)) + 1;
+      // 占空比计算
     Dm = volt_cmd / Ud * sin(1/3.0 * pi - theta);
     Dn = volt_cmd / Ud * sin(theta);
     D0 = (1 - Dm - Dn) / 2.0;
@@ -128,7 +148,7 @@ void PWMA_RELOAD0_IRQHandler(void)
     PWM_WR_VAL3(PWMA, 2, Tinv[2]);
     
     period_count++;
-    if (period_count > 60000) 
+    if (period_count > 60000)  // 6s存储一次电流最小值
     {
       period_count = 0;
       minIUarray[kmin] = minIU;
@@ -137,45 +157,191 @@ void PWMA_RELOAD0_IRQHandler(void)
       minIW = IW;
       kmin++;
     }
-
-    last[0] = Tinv[0];
-    last[1] = Tinv[1];
-    last[2] = Tinv[2];
     
     PWM_WR_STS_RF(PWMA, 0, TRUE);
     /* start PWMs (set load OK flags and run) */
     PWM_WR_MCTRL_LDOK(PWMA, TRUE);
  }
 
+/******************************************************************************
+@brief   PWMA 错误中断
+
+@param   N/A
+
+@return  N/A
+******************************************************************************/
 void PWMA_RERR_IRQHandler(void)
 {
   GPIO_WR_PSOR(PTB, 1<<22);
 }
 
+/******************************************************************************
+@brief   PIT 中断 -- 计算转速及频率给定值
+
+@param   N/A
+
+@return  N/A
+******************************************************************************/
 void PIT0_IRQHandler(void)
 {
   PIT_WR_TFLG_TIF(PIT, 0, 1);
-  GPIO_WR_PTOR(PTD, 1<<0);
   GPIO_WR_PTOR(PTB, 1<<22);
   
-  if (FTM_RD_SC_TOF(FTM1) == 0)
+  /* 转速计算 M法 */
+  if (FTM_RD_SC_TOF(FTM1) == 0)  // 计数值未溢出
   {
     speed = (int)((FTM_RD_CNT(FTM1) - FTM1cnt) * 2.34375);
   }
-  else
+  else  // 溢出
   {
     speed = (int)((FTM_RD_CNT(FTM1) + FTM1_MODULO - FTM1cnt) * 2.34375);
     FTM_WR_SC_TOF(FTM1, 0);
   }
+  
   FTM1cnt = FTM_RD_CNT(FTM1);
   
+  /* 频率斜坡函数 */
   if (fre_cmd < fre_req)
   {
-    PIT_count ++;
     fre_cmd = RAMP(Freramp, fre_cmd, 0.1, Frelimit_H, Frelimit_L);
   }
 }
 
+/******************************************************************************
+@brief   PWMA 初始化
+
+@param   N/A
+
+@return  N/A
+******************************************************************************/
+void Init_PWMA(void)
+{
+    /* enable clock for eFlexPWM modules 0,1 and 2 in SIM module */
+    SIM_WR_SCGC4_eFlexPWM0(SIM, TRUE);
+    SIM_WR_SCGC4_eFlexPWM1(SIM, TRUE);
+    SIM_WR_SCGC4_eFlexPWM2(SIM, TRUE);
+
+    /* full cycle reload */
+    PWM_WR_CTRL_FULL(PWMA, 0, TRUE);
+    PWM_WR_CTRL_FULL(PWMA, 1, TRUE);
+    PWM_WR_CTRL_FULL(PWMA, 2, TRUE);
+    
+    /* value register initial values, duty cycle 50% */
+    PWM_WR_INIT(PWMA, 0, (uint16_t)(-(M1_PWM_MODULO/2)));
+    PWM_WR_INIT(PWMA, 1, (uint16_t)(-(M1_PWM_MODULO/2)));
+    PWM_WR_INIT(PWMA, 2, (uint16_t)(-(M1_PWM_MODULO/2)));
+    PWM_WR_INIT(PWMA, 3, (uint16_t)(-(M1_PWM_MODULO/2)));
+    
+    PWM_WR_VAL0(PWMA, 0, (uint16_t)(0));
+    PWM_WR_VAL0(PWMA, 1, (uint16_t)(0));
+    PWM_WR_VAL0(PWMA, 2, (uint16_t)(0));
+    PWM_WR_VAL0(PWMA, 3, (uint16_t)(0));
+    
+    PWM_WR_VAL1(PWMA, 0, (uint16_t)((M1_PWM_MODULO/2)-1));
+    PWM_WR_VAL1(PWMA, 1, (uint16_t)((M1_PWM_MODULO/2)-1));
+    PWM_WR_VAL1(PWMA, 2, (uint16_t)((M1_PWM_MODULO/2)-1));
+    PWM_WR_VAL1(PWMA, 3, (uint16_t)((M1_PWM_MODULO/2)-1));
+    
+    PWM_WR_VAL2(PWMA, 0, (uint16_t)(-(M1_PWM_MODULO/4)));
+    PWM_WR_VAL2(PWMA, 1, (uint16_t)(-(M1_PWM_MODULO/4)));
+    PWM_WR_VAL2(PWMA, 2, (uint16_t)(-(M1_PWM_MODULO/4)));
+    PWM_WR_VAL2(PWMA, 3, (uint16_t)(-(M1_PWM_MODULO/4)));
+    
+    PWM_WR_VAL3(PWMA, 0, (uint16_t)((M1_PWM_MODULO/4)));
+    PWM_WR_VAL3(PWMA, 1, (uint16_t)((M1_PWM_MODULO/4)));
+    PWM_WR_VAL3(PWMA, 2, (uint16_t)((M1_PWM_MODULO/4)));
+    PWM_WR_VAL3(PWMA, 3, (uint16_t)((M1_PWM_MODULO/4)));
+    
+    PWM_WR_VAL4(PWMA, 0, (uint16_t)(0)); /* ADCA trigger */
+    PWM_WR_VAL4(PWMA, 1, (uint16_t)(0));
+    PWM_WR_VAL4(PWMA, 2, (uint16_t)(0));
+    PWM_WR_VAL4(PWMA, 3, (uint16_t)(0));
+    
+    PWM_WR_VAL5(PWMA, 0, (uint16_t)(0)); 
+    PWM_WR_VAL5(PWMA, 1, (uint16_t)(0));
+    PWM_WR_VAL5(PWMA, 2, (uint16_t)(0));
+    PWM_WR_VAL5(PWMA, 3, (uint16_t)(0));
+    
+    /* PWMA module 0 trigger on VAL4 enabled for ADC synchronization */
+    //PWM_WR_TCTRL_OUT_TRIG_EN(PWMA, 0, (1<<4));
+
+    /* recomended value of deadtime for FNB41560 on HVP-MC3PH is 1.5us
+       DTCNT0,1 = T_dead * f_fpc = 1.5us * 74MHz = 111 */
+    PWM_WR_DTCNT0(PWMA, 0, 111);
+    PWM_WR_DTCNT0(PWMA, 1, 111);
+    PWM_WR_DTCNT0(PWMA, 2, 111);
+    PWM_WR_DTCNT0(PWMA, 3, 111);
+    PWM_WR_DTCNT1(PWMA, 0, 111);
+    PWM_WR_DTCNT1(PWMA, 1, 111);
+    PWM_WR_DTCNT1(PWMA, 2, 111);
+    PWM_WR_DTCNT1(PWMA, 3, 111);
+      
+    /* channels A and B disabled when fault 0 occurs */
+    PWM_WR_DISMAP_DIS0A(PWMA, 0, 0, 0x0);
+    PWM_WR_DISMAP_DIS0A(PWMA, 1, 0, 0x0);
+    PWM_WR_DISMAP_DIS0A(PWMA, 2, 0, 0x0); 
+    PWM_WR_DISMAP_DIS0B(PWMA, 0, 0, 0x0);
+    PWM_WR_DISMAP_DIS0B(PWMA, 1, 0, 0x0);
+    PWM_WR_DISMAP_DIS0B(PWMA, 2, 0, 0x0); 
+
+    /* modules one and two gets clock from module zero */
+    PWM_WR_CTRL2_CLK_SEL(PWMA, 1, 0x2);
+    PWM_WR_CTRL2_CLK_SEL(PWMA, 2, 0x2);
+    
+    /* master reload active for modules one and two*/
+    PWM_WR_CTRL2_RELOAD_SEL(PWMA, 1, TRUE);
+    PWM_WR_CTRL2_RELOAD_SEL(PWMA, 2, TRUE);
+    
+    /* master sync active for modules one and two*/
+    PWM_WR_CTRL2_INIT_SEL(PWMA, 1, 0x2);
+    PWM_WR_CTRL2_INIT_SEL(PWMA, 2, 0x2);
+    
+    /* fault 0 active in high, fault 1 active in low, manual clearing */
+    PWM_WR_FCTRL_FLVL(PWMA, 0x1);
+    PWM_WR_FCTRL_FAUTO(PWMA, 0x0);
+
+    /* PWMs are re-enabled at PWM full cycle */
+    PWM_WR_FSTS_FFULL(PWMA, 0x1); 
+     
+    /* PWM fault filter - 5 Fast periph. clocks sample rate, 5 agreeing 
+       samples to activate */
+    PWM_WR_FFILT_FILT_PER(PWMA, 5);
+    PWM_WR_FFILT_FILT_CNT(PWMA, 5);
+        
+    /* enable A&B PWM outputs for submodules one, two and three */
+    PWM_WR_OUTEN_PWMA_EN(PWMA, 0x7);
+    PWM_WR_OUTEN_PWMB_EN(PWMA, 0x7);
+    
+    PWM_WR_CTRL_PRSC(PWMA, 0, 0);
+    //PWM_WR_CTRL_PRSC(PWMA, 1, 3);
+    //PWM_WR_CTRL_PRSC(PWMA, 2, 3);
+       
+    /* start PWMs (set load OK flags and run) */
+    PWM_WR_MCTRL_CLDOK(PWMA, 0x7);
+    PWM_WR_MCTRL_LDOK(PWMA, 0x7);
+    PWM_WR_MCTRL_RUN(PWMA, 0x7);
+    
+    /* set ports */
+    PORT_WR_PCR_MUX(PORTD, 0, 6);                                               /* HVP-MC3PH phase A top */
+    PORT_WR_PCR_MUX(PORTD, 1, 6);                                               /* HVP-MC3PH phase A bottom */
+    PORT_WR_PCR_MUX(PORTD, 2, 6);                                               /* HVP-MC3PH phase B top */
+    PORT_WR_PCR_MUX(PORTD, 3, 6);                                               /* HVP-MC3PH phase B bottom */
+    PORT_WR_PCR_MUX(PORTD, 4, 5);                                               /* HVP-MC3PH phase C top */
+    PORT_WR_PCR_MUX(PORTD, 5, 5);                                               /* HVP-MC3PH phase C bottom */
+    
+    PWM_WR_INTEN_RIE(PWMA, 0 , TRUE);
+    /* enable & setup interrupts */
+    NVIC_EnableIRQ(PWMA_RELOAD0_IRQn);                                                  /* enable Interrupt */
+    NVIC_SetPriority(PWMA_RELOAD0_IRQn, 3);                                             /* set priority to interrupt */
+}
+
+/******************************************************************************
+@brief   ADC 初始化
+
+@param   N/A
+
+@return  N/A
+******************************************************************************/
 void Init_ADC(void)
 {
   /* enable clock for ADC modules */
@@ -224,6 +390,13 @@ void Init_ADC(void)
   // NVIC_SetPriority(ADCA_IRQn, 4);                                             /* set priority to interrupt */
 }
 
+/******************************************************************************
+@brief   FTM1 初始化 -- 计算转速
+
+@param   N/A
+
+@return  N/A
+******************************************************************************/
 void Init_FTM1(void)
 {
   /* enable the clock for FTM1 */
@@ -272,6 +445,17 @@ void Init_FTM1(void)
   PORT_WR_PCR_MUX(PORTA, 13, 7);  
 }
 
+/******************************************************************************
+@brief   RAMP -- 增量式斜坡函数
+
+@param   ramp -- 斜率
+         initial -- 应变量起始值
+         increment -- 自变量增量
+         Hlimit -- 上限
+         Llimit -- 下限
+
+@return  应变量终值
+******************************************************************************/
 double RAMP(double ramp, double initial, double increment, double Hlimit, double Llimit)
 {
   double temp = ramp * increment + initial;
@@ -283,19 +467,13 @@ double RAMP(double ramp, double initial, double increment, double Hlimit, double
     return temp;
 }
 
-double PImodule(double Kp, double Ki, double inputk, double err, double *lasterr, double Uplim, double Downlim)
-{
-  //inputk += Kp * (err - *lasterr) + Ki * Ts * err;
-  *lasterr = err;
-  
-  if (inputk >= Downlim && inputk <= Uplim)
-    return inputk;
-  else if (inputk > Uplim)
-    return Uplim;
-  else
-    return Downlim;
-}
+/******************************************************************************
+@brief   roundn -- 有理数取指定位数
 
+@param   input -- 输入
+
+@return  舍弃指定位数后的值
+******************************************************************************/
 double roundn(double input)
 {
   double temp;

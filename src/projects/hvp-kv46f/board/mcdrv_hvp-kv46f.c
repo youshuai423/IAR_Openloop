@@ -222,7 +222,6 @@ void InitFTM0(void)
 #if (M1_MCDRV_PWM3PH == MCDRV_PWMA)
 void InitPWMA(void)
 {
-  
     /* enable clock for eFlexPWM modules 0,1 and 2 in SIM module */
     SIM_WR_SCGC4_eFlexPWM0(SIM, TRUE);
     SIM_WR_SCGC4_eFlexPWM1(SIM, TRUE);
