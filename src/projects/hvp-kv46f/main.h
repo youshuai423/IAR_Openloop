@@ -20,7 +20,9 @@
 #define Voltlimit_H 40  // 电压给定上限
 #define Voltlimit_L 5  // 电压给定下限
 
+#define FTM0_MODULO 3700  // FTM1计数上限
 #define FTM1_MODULO 60000  // FTM1计数上限
+#define FTM3_MODULO 3700  // FTM3计数上限
 
 /******************************************************************************
 | variables
@@ -30,7 +32,9 @@
 | local functions prototypes
 |----------------------------------------------------------------------------*/
 void Init_PWMA();
+void Init_FTM0();
 void Init_FTM1();
+void Init_FTM3();
 void Init_ADC();
 double RAMP(double ramp, double initial, double increment, double Hlimit, double Llimit);
 double roundn(double);  // 截断小数点后位数
