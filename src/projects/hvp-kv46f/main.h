@@ -32,7 +32,6 @@
 | local functions prototypes
 |----------------------------------------------------------------------------*/
 void Init_PWMA();
-void Init_FTM0();
 void Init_FTM1();
 void Init_FTM3();
 void Init_ADC();
